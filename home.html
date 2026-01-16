@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive GPA Calculator</title>
+<style>
+body {
+  font-family: 'Tahoma', sans-serif;
+  background: #e0f7ff;
+  margin: 0;
+  padding: 20px;
+}
+h1 { text-align:center; color:#005fa3; margin-bottom:20px; }
+.container { max-width:900px; margin:auto; background:#fff; border-radius:15px; padding:25px; box-shadow:0 6px 20px rgba(0,0,0,0.1);}
+button { background:#0077cc; color:#fff; padding:10px 15px; border:none; border-radius:8px; cursor:pointer; transition:.3s; }
+button:hover{ background:#005fa3; }
+table { width:100%; border-collapse: collapse; margin-top:20px; }
+th,td { border:1px solid #ddd; padding:10px; text-align:center; }
+th{ background:#0077cc; color:white; }
+.action-btn { padding: 5px 8px; border-radius: 4px; margin: 0 2px; color: white; cursor: pointer; }
+.edit-btn { background: orange; }
+.edit-btn:hover { background: darkorange; }
+.delete-btn { background: crimson; }
+.delete-btn:hover { background: darkred; }
+.summary { margin-top: 20px; font-size: 18px; font-weight: bold; }
+.warning { margin-top: 15px; padding: 12px; background-color: #f8d7da; color: #842029; border-radius: 8px; font-weight: bold; display: none; text-align: center; }
+.modal { display: none; position: fixed; z-index: 999; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+.modal-content { background-color: #fff; margin: 10% auto; padding: 20px; border-radius: 15px; max-width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.close { float: left; font-size: 24px; font-weight: bold; cursor: pointer; color: #333; }
+input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
+@media (max-width: 600px) {
+  .container { padding: 15px; }
+  input, button { font-size: 14px; padding: 8px; }
+}
+</style>
+</head>
+<body>
+
+<h1>Interactive GPA Calculator by Gamal Zakareya</h1>
+
+<button onclick="logout()" style="float:right;margin-bottom:10px;">Logout</button>
+
+<div class="container">
+  <button onclick="openModal()">Add New Course</button>
+
+  <table id="coursesTable">
+    <thead>
+      <tr>
+        <th>Course</th>
+        <th>Obtained Grade</th>
+        <th>Credit Hours</th>
+        <th>Max Grade</th>
+        <th>Percentage</th>
+        <th>GPA</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="summary">
+    <p>Overall Percentage: <span id="averagePercent">0</span>%</p>
+    <p>Overall GPA: <span id="averageGPA">0</span></p>
+  </div>
+
+  <div id="warningMessage" class="warning">
+    مجموعك اقل من 60%
+  </div>
+</div>
+
+<div id="courseModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal()">&times;</span>
+    <h2>Add/Edit Course</h2>
+    <input id="courseName" placeholder="Course Name">
+    <input id="courseGrade" type="number" placeholder="Obtained Grade">
+    <input id="courseHours" type="number" placeholder="Credit Hours">
+    <button id="saveCourseBtn">Save Course</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDZULtmHIe94Iy7HG7ja6Fyf4iitS4FNhA",
+  authDomain: "gpa-calc-sci-mu.firebaseapp.com",
+  projectId: "gpa-calc-sci-mu",
+  storageBucket: "gpa-calc-sci-mu.firebasestorage.app",
+  messagingSenderId: "144340568708",
+  appId: "1:144340568708:web:3efe47f1d14d00e2a150d1"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+// حماية الصفحة
+onAuthStateChanged(auth, (user)=>{
+  if(!user) window.location.href="index.html";
+});
+
+// Logout function
+window.logout = function(){ signOut(auth).then(()=> window.location.href="index.html"); }
+
+// GPA Calculator JS
+let courses = JSON.parse(localStorage.getItem('courses')) || [];
+let editIndex = null;
+
+function percentToGPA(percent) {
+  if(percent >= 90) return 4.0;
+  else if(percent >= 85) return 3.7;
+  else if(percent >= 80) return 3.3;
+  else if(percent >= 75) return 3.0;
+  else if(percent >= 70) return 2.7;
+  else if(percent >= 65) return 2.3;
+  else if(percent >= 60) return 2.0;
+  else return 0;
+}
+
+function saveCourses() { localStorage.setItem('courses', JSON.stringify(courses)); }
+
+function renderCourses() {
+  const tbody = document.querySelector('#coursesTable tbody');
+  const warning = document.getElementById('warningMessage');
+  tbody.innerHTML = '';
+  let totalHours = 0, totalPoints = 0, totalPercentPoints = 0;
+
+  courses.forEach((c,index)=>{
+    const maxGrade = c.hours*100;
+    const percent = (c.grade/maxGrade*100).toFixed(2);
+    const gpa = percentToGPA(percent);
+
+    let color = '';
+    if(percent >=90) color='#2ecc71';
+    else if(percent>=85) color='#27ae60';
+    else if(percent>=80) color='#3498db';
+    else if(percent>=75) color='#2980b9';
+    else if(percent>=70) color='#f1c40f';
+    else if(percent>=65) color='#f39c12';
+    else if(percent>=60) color='#e67e22';
+    else color='#e74c3c';
+
+    tbody.innerHTML += `<tr style="background:${color}33">
+      <td>${c.name}</td>
+      <td>${c.grade}</td>
+      <td>${c.hours}</td>
+      <td>${maxGrade}</td>
+      <td>${percent}</td>
+      <td>${gpa.toFixed(2)}</td>
+      <td>
+        <button class="action-btn edit-btn" onclick="openModal(${index})">Edit</button>
+        <button class="action-btn delete-btn" onclick="deleteCourse(${index})">Delete</button>
+      </td>
+    </tr>`;
+
+    totalHours += c.hours;
+    totalPoints += gpa*c.hours;
+    totalPercentPoints += (c.grade/maxGrade*100)*c.hours;
+  });
+
+  const avgPercent = totalHours ? (totalPercentPoints/totalHours).toFixed(2) : 0;
+  const avgGPA = totalHours ? (totalPoints/totalHours).toFixed(2) : 0;
+
+  document.getElementById('averagePercent').innerText = avgPercent;
+  document.getElementById('averageGPA').innerText = avgGPA;
+
+  if(avgPercent < 60 && courses.length>0) warning.style.display='block';
+  else warning.style.display='none';
+}
+
+// Modal functions
+function openModal(index=null){
+  editIndex=index;
+  document.getElementById('courseModal').style.display='block';
+  if(index!==null){
+    const c = courses[index];
+    document.getElementById('courseName').value=c.name;
+    document.getElementById('courseGrade').value=c.grade;
+    document.getElementById('courseHours').value=c.hours;
+  } else {
+    document.getElementById('courseName').value='';
+    document.getElementById('courseGrade').value='';
+    document.getElementById('courseHours').value='';
+  }
+}
+
+function closeModal(){ document.getElementById('courseModal').style.display='none'; }
+
+document.getElementById('saveCourseBtn').onclick = ()=>{
+  const name = document.getElementById('courseName').value.trim();
+  const grade = parseFloat(document.getElementById('courseGrade').value);
+  const hours = parseFloat(document.getElementById('courseHours').value);
+  if(!name || isNaN(grade) || isNaN(hours)){ alert('Please complete all fields'); return; }
+
+  if(editIndex!==null) courses[editIndex]={name,grade,hours};
+  else courses.push({name,grade,hours});
+
+  saveCourses(); renderCourses(); closeModal();
+}
+
+function deleteCourse(index){ 
+  if(confirm('Are you sure you want to delete this course?')){
+    courses.splice(index,1); 
+    saveCourses(); 
+    renderCourses(); 
+  } 
+}
+
+window.onclick = e=>{ if(e.target==document.getElementById('courseModal')) closeModal(); }
+
+renderCourses();
+</script>
+
+</body>
+</html>
